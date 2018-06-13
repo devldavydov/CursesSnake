@@ -1,2 +1,9 @@
 # CursesSnake
-Console snake game made on ncurses
+Console snake game on ncurses library.
+
+### Start
+```
+python csnake.py
+```
+
+Under development.
