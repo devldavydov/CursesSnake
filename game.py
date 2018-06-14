@@ -102,4 +102,6 @@ class SnakeGame(object):
 
             # Refresh and read input
             self.game_obj.scr_obj.refresh()
-            self.game_obj.key = self.game_obj.scr_obj.getch()
+            ch = self.game_obj.scr_obj.getch()
+            if ch != -1:
+                self.game_obj.key = ch
