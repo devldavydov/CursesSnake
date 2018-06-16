@@ -89,6 +89,9 @@ class SnakeGame(object):
             elif self.game_obj.key == ord('s'):
                 if not isinstance(self.mode, mode.GameModePlay):
                     self.mode = mode.GameModePlay(self.game_obj)
+            elif self.game_obj.key == ord('i'):
+                if not isinstance(self.mode, mode.GameModeIntro):
+                    self.mode = mode.GameModeIntro(self.game_obj)
             elif self.game_obj.key == curses.KEY_RESIZE:
                 raise SystemExit('Terminal resize not supported')
             else:

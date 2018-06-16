@@ -1,6 +1,6 @@
 """Game mode classes"""
+import collections
 import curses
-import json
 import random
 import time
 
@@ -25,6 +25,7 @@ class GameMode(object):
         self.howto = (
             u'USE \u2190 \u2191 \u2192 \u2193 TO CONTROL SNAKE',
             u"PRESS 's' TO START GAME",
+            u"PRESS 'i' TO INTRO SCREEN",
             u"PRESS 't' TO CHANGE TIMESTAMP FORMAT",
             u"PRESS 'q' TO EXIT"
         )
@@ -40,6 +41,7 @@ class GameModeIntro(GameMode):
     def __init__(self, game_obj):
         """Constructor"""
         super(GameModeIntro, self).__init__(game_obj)
+        self.howto = tuple(val for i, val in enumerate(self.howto) if i != 2)
         self.about_form = {
             'w': 65,
             'h': 30
@@ -156,7 +158,7 @@ class GameModePlay(GameMode):
         self.t = 0
         # Snake
         self.points = 0
-        self.speed = 1
+        self.speed = 1.0
         self.direction_map = {
             curses.KEY_UP: (0, -1),
             curses.KEY_DOWN: (0, 1),
@@ -164,14 +166,19 @@ class GameModePlay(GameMode):
             curses.KEY_RIGHT: (1, 0)
         }
         self.snake = {
-            'items': [[self.field['x'][1] / 2, self.field['y'][1] / 2]],        # List of x, y
+            'items': collections.deque([[self.field['x'][1] / 2, self.field['y'][1] / 2]]),        # List of x, y
             'direction': self.direction_map[curses.KEY_UP],                     # Incr. of x, y
             'symbol': '#'
         }
-        for i in range(1, 6):
+        for i in range(1, 5):
             self.snake['items'].append(
                 [self.snake['items'][0][0], self.snake['items'][0][1] + i]
             )
+        # Prey
+        self.prey = {
+            'point': self._get_new_prey(),
+            'symbol': '$'
+        }
 
     def _render_field_border(self):
         """Render game field border"""
@@ -192,6 +199,7 @@ class GameModePlay(GameMode):
         x, y = self.field['x'][1] + 3, self.field['y'][0]
         self.scr_obj.addstr(y + 1, x, 'YOUR POINTS = {0}'.format(self.points))
         self.scr_obj.addstr(y + 3, x, 'YOUR SPEED = {0}'.format(self.speed))
+        self.scr_obj.addstr(y + 5, x, 'SNAKE LENGTH = {0}'.format(len(self.snake['items'])))
 
         y = self.field['y'][1] - len(self.howto)
         for s in self.howto:
@@ -207,7 +215,7 @@ class GameModePlay(GameMode):
         for item in self.snake['items']:
             self.scr_obj.addstr(item[1], item[0], self.snake['symbol'])
 
-        if time.time() - self.t > 1. / (self.speed * 10):
+        if time.time() - self.t > 1 / (self.speed * 10):
             # Check key
             if self.game_obj.key in self.direction_map:
                 self.snake['direction'] = self.direction_map[self.game_obj.key]
@@ -220,13 +228,42 @@ class GameModePlay(GameMode):
             # Head
             self.snake['items'][0][0] += self.snake['direction'][0]
             self.snake['items'][0][1] += self.snake['direction'][1]
-            if self._check_field_border(*self.snake['items'][0]):
+            if (
+                self._check_field_border(*self.snake['items'][0]) or
+                self.snake['items'].count(self.snake['items'][0]) > 1
+            ):
                 raise SystemExit('Game over')
 
             self.t = time.time()
+
+    def _render_prey(self):
+        """Render prey"""
+        self.scr_obj.addstr(self.prey['point'][1], self.prey['point'][0], self.prey['symbol'])
+
+    def _check_prey(self):
+        """Check prey eaten"""
+        if self.prey['point'] == self.snake['items'][0]:
+            self.prey['point'] = self._get_new_prey()
+            self.points += 1
+            if self.points % 5 == 0:
+                self.speed += 0.1
+
+            # Append to snake
+            self.snake['items'].appendleft([
+                self.snake['items'][0][0] + self.snake['direction'][0],
+                self.snake['items'][0][1] + self.snake['direction'][1]
+            ])
+
+    def _get_new_prey(self):
+        return [
+            random.randrange(self.field['x'][0] + 1, self.field['x'][1] - 1),
+            random.randrange(self.field['y'][0] + 1, self.field['y'][1] - 1)
+        ]
 
     def render(self):
         """Render play mode"""
         self._render_field_border()
         self._render_stats_form()
         self._render_snake()
+        self._render_prey()
+        self._check_prey()
