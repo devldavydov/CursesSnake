@@ -11,7 +11,6 @@ class GameMode(object):
     def __init__(self, game_obj):
         """Constructor"""
         self.game_obj = game_obj
-        self.scr_obj = game_obj.scr_obj
         self.border = {
             'h': u'\u2550'.encode('utf-8'),         # Horizontal
             'v': u'\u2551'.encode('utf-8'),         # Vertical
@@ -60,46 +59,49 @@ class GameModeIntro(GameMode):
 
     def _render_bg(self):
         """Render background"""
-        [m.render(self.scr_obj) for m in self.bg_matrix]
+        with self.game_obj.attrmng(curses.color_pair(1)):
+            [m.render(self.game_obj) for m in self.bg_matrix]
 
     def _render_about_form(self):
         """Render about form"""
         # Render about form background
-        x, y = self.about_form['x'], self.about_form['y']
-        for i in range(self.about_form['h'] + 3):
-            self.scr_obj.addstr(y - 1 + i, x - 1, ' ' * (self.about_form['w'] + 2))
+        with self.game_obj.attrmng(curses.color_pair(1)):
+            x, y = self.about_form['x'], self.about_form['y']
+            for i in range(self.about_form['h'] + 3):
+                self.game_obj.addstr(y - 1 + i, x - 1, ' ' * (self.about_form['w'] + 2))
 
-        # Render about form border
-        self.scr_obj.addstr(
-            y, x,
-            self.border['jtl'] +
-            self.border['h'] * (self.about_form['w'] - 2) +
-            self.border['jtr']
-        )
-        self.scr_obj.addstr(
-            y + 4, x,
-            self.border['jhl'] +
-            self.border['h'] * (self.about_form['w'] - 2) +
-            self.border['jhr']
-        )
-        self.scr_obj.addstr(
-            y + self.about_form['h'], x,
-            self.border['jbl'] +
-            self.border['h'] * (self.about_form['w'] - 2) +
-            self.border['jbr']
-        )
-        for i in [j for j in range(self.about_form['h']) if j not in (0, 4)]:
-            self.scr_obj.addstr(y + i, x, self.border['v'])
-            self.scr_obj.addstr(y + i, x + self.about_form['w'] - 1, self.border['v'])
+            # Render about form border
+            self.game_obj.addstr(
+                y, x,
+                self.border['jtl'] +
+                self.border['h'] * (self.about_form['w'] - 2) +
+                self.border['jtr']
+            )
+            self.game_obj.addstr(
+                y + 4, x,
+                self.border['jhl'] +
+                self.border['h'] * (self.about_form['w'] - 2) +
+                self.border['jhr']
+            )
+            self.game_obj.addstr(
+                y + self.about_form['h'], x,
+                self.border['jbl'] +
+                self.border['h'] * (self.about_form['w'] - 2) +
+                self.border['jbr']
+            )
+            for i in [j for j in range(self.about_form['h']) if j not in (0, 4)]:
+                self.game_obj.addstr(y + i, x, self.border['v'])
+                self.game_obj.addstr(y + i, x + self.about_form['w'] - 1, self.border['v'])
 
         # Render about form text
-        s = '!!! WELCOME TO SNAKE GAME !!!'
-        self.scr_obj.addstr(y + 2, x + (self.about_form['w'] - len(s)) / 2, s)
-        y += 8
-        x += 2
-        for s in self.howto:
-            y += 2
-            self.scr_obj.addstr(y, x, s.encode('utf-8'))
+        with self.game_obj.attrmng(curses.color_pair(2)):
+            s = '!!! WELCOME TO SNAKE GAME !!!'
+            self.game_obj.addstr(y + 2, x + (self.about_form['w'] - len(s)) / 2, s)
+            y += 8
+            x += 2
+            for s in self.howto:
+                y += 2
+                self.game_obj.addstr(y, x, s.encode('utf-8'))
 
     def render(self):
         """Render about form and background"""
@@ -123,7 +125,7 @@ class GameModeIntro(GameMode):
             self.cur_iter = iter(' ' * random.randrange(1, 5)) if random.random() > 0.5 else iter(self.letters)
             self.timeout = random.choice(range(5, 10, 1)) * 0.01
 
-        def render(self, scr):
+        def render(self, game_obj):
             """Render matrix item"""
             if time.time() - self.t > self.timeout:
                 try:
@@ -137,7 +139,7 @@ class GameModeIntro(GameMode):
                 self.t = time.time()
 
             for pos, val in enumerate(self.data_list):
-                scr.addstr(self.start_point[1] + pos, self.start_point[0], val)
+                game_obj.addstr(self.start_point[1] + pos, self.start_point[0], val)
 
 
 class GameModePlay(GameMode):
@@ -155,20 +157,20 @@ class GameModePlay(GameMode):
             'x': (1, self.game_obj.scr_x[1] - self.stats_form['w']),
             'y': (1, self.game_obj.scr_y[1])
         }
-        self.t = 0
         # Snake
         self.points = 0
         self.speed = 1.0
         self.direction_map = {
-            curses.KEY_UP: (0, -1),
-            curses.KEY_DOWN: (0, 1),
-            curses.KEY_LEFT: (-1, 0),
-            curses.KEY_RIGHT: (1, 0)
+            curses.KEY_UP: (0, -1, 0),          # x, y, direction_group_id
+            curses.KEY_DOWN: (0, 1, 0),
+            curses.KEY_LEFT: (-1, 0, 1),
+            curses.KEY_RIGHT: (1, 0, 1)
         }
         self.snake = {
             'items': collections.deque([[self.field['x'][1] / 2, self.field['y'][1] / 2]]),        # List of x, y
             'direction': self.direction_map[curses.KEY_UP],                     # Incr. of x, y
-            'symbol': '#'
+            'symbol': '#',
+            'time': 0
         }
         for i in range(1, 5):
             self.snake['items'].append(
@@ -177,48 +179,56 @@ class GameModePlay(GameMode):
         # Prey
         self.prey = {
             'point': self._get_new_prey(),
-            'symbol': '$'
+            'symbol': u'\u25c9'.encode('utf-8'),
+            'time': 0,
+            'timeout': 0.3,
+            'show_flag': True
         }
 
     def _render_field_border(self):
         """Render game field border"""
-        self.scr_obj.addstr(self.field['y'][0], self.field['x'][0], self.border['jtl'])
-        self.scr_obj.addstr(self.field['y'][1], self.field['x'][0], self.border['jbl'])
-        self.scr_obj.addstr(self.field['y'][0], self.field['x'][1], self.border['jtr'])
-        self.scr_obj.addstr(self.field['y'][1], self.field['x'][1], self.border['jbr'])
-        self.scr_obj.addstr(self.field['y'][0], self.field['x'][0] + 1, 'F')
-        for i in range(self.field['x'][0] + 1, self.field['x'][1]):
-            self.scr_obj.addstr(self.field['y'][0], i, self.border['h'])
-            self.scr_obj.addstr(self.field['y'][1], i, self.border['h'])
-        for i in range(self.field['y'][0] + 1, self.field['y'][1]):
-            self.scr_obj.addstr(i, self.field['x'][0], self.border['v'])
-            self.scr_obj.addstr(i, self.field['x'][1], self.border['v'])
+        with self.game_obj.attrmng(curses.color_pair(1)):
+            self.game_obj.addstr(self.field['y'][0], self.field['x'][0], self.border['jtl'])
+            self.game_obj.addstr(self.field['y'][1], self.field['x'][0], self.border['jbl'])
+            self.game_obj.addstr(self.field['y'][0], self.field['x'][1], self.border['jtr'])
+            self.game_obj.addstr(self.field['y'][1], self.field['x'][1], self.border['jbr'])
+            for i in range(self.field['x'][0] + 1, self.field['x'][1]):
+                self.game_obj.addstr(self.field['y'][0], i, self.border['h'])
+                self.game_obj.addstr(self.field['y'][1], i, self.border['h'])
+            for i in range(self.field['y'][0] + 1, self.field['y'][1]):
+                self.game_obj.addstr(i, self.field['x'][0], self.border['v'])
+                self.game_obj.addstr(i, self.field['x'][1], self.border['v'])
 
     def _render_stats_form(self):
         """Render stats form"""
-        x, y = self.field['x'][1] + 3, self.field['y'][0]
-        self.scr_obj.addstr(y + 1, x, 'YOUR POINTS = {0}'.format(self.points))
-        self.scr_obj.addstr(y + 3, x, 'YOUR SPEED = {0}'.format(self.speed))
-        self.scr_obj.addstr(y + 5, x, 'SNAKE LENGTH = {0}'.format(len(self.snake['items'])))
+        with self.game_obj.attrmng(curses.color_pair(2)):
+            x, y = self.field['x'][1] + 3, self.field['y'][0]
+            self.game_obj.addstr(y + 1, x, 'YOUR POINTS = {0}'.format(self.points))
+            self.game_obj.addstr(y + 3, x, 'YOUR SPEED = {0}'.format(self.speed))
+            self.game_obj.addstr(y + 5, x, 'SNAKE LENGTH = {0}'.format(len(self.snake['items'])))
 
-        y = self.field['y'][1] - len(self.howto)
-        for s in self.howto:
-            self.scr_obj.addstr(y, x, s.encode('utf-8'))
-            y += 1
+            y = self.field['y'][1] - len(self.howto)
+            for s in self.howto:
+                self.game_obj.addstr(y, x, s.encode('utf-8'))
+                y += 1
 
     def _check_field_border(self, x, y):
         """Check if point on field border"""
-        return x < self.field['x'][0] or x > self.field['x'][1] or y < self.field['y'][0] or y > self.field['y'][1]
+        return x <= self.field['x'][0] or x >= self.field['x'][1] or y <= self.field['y'][0] or y >= self.field['y'][1]
 
     def _render_snake(self):
         """Render snake"""
-        for item in self.snake['items']:
-            self.scr_obj.addstr(item[1], item[0], self.snake['symbol'])
+        with self.game_obj.attrmng(curses.color_pair(1)):
+            for i, item in enumerate(self.snake['items']):
+                self.game_obj.addstr(item[1], item[0], self.snake['symbol'])
 
-        if time.time() - self.t > 1 / (self.speed * 10):
+        if time.time() - self.snake['time'] > 1 / (self.speed * 10):
             # Check key
-            if self.game_obj.key in self.direction_map:
-                self.snake['direction'] = self.direction_map[self.game_obj.key]
+            key = self.game_obj.check_key(lambda k: k in self.direction_map)
+            if key:
+                # Check not one group directions
+                if not self.snake['direction'][2] == self.direction_map[key][2]:
+                    self.snake['direction'] = self.direction_map[key]
 
             # Change items coordinates
             # Tail items
@@ -229,16 +239,25 @@ class GameModePlay(GameMode):
             self.snake['items'][0][0] += self.snake['direction'][0]
             self.snake['items'][0][1] += self.snake['direction'][1]
             if (
-                self._check_field_border(*self.snake['items'][0]) or
+                self._check_field_border(*self.snake['items'][1]) or    # We check second item to render collision
                 self.snake['items'].count(self.snake['items'][0]) > 1
             ):
                 raise SystemExit('Game over')
 
-            self.t = time.time()
+            self.snake['time'] = time.time()
 
     def _render_prey(self):
         """Render prey"""
-        self.scr_obj.addstr(self.prey['point'][1], self.prey['point'][0], self.prey['symbol'])
+        if time.time() - self.prey['time'] > self.prey['timeout']:
+            self.prey['show_flag'] = not self.prey['show_flag']
+            self.prey['time'] = time.time()
+
+        with self.game_obj.attrmng(curses.color_pair(4)):
+            self.game_obj.addstr(
+                self.prey['point'][1],
+                self.prey['point'][0],
+                self.prey['symbol'] if self.prey['show_flag'] else ''
+            )
 
     def _check_prey(self):
         """Check prey eaten"""
