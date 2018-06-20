@@ -16,6 +16,7 @@ class GameMetaObject(object):
         self.scr_x = [1, None]      # Screen X [min, max]
         self.scr_y = [1, None]      # Screen Y [min, max]
         self.key = 0                # Key pressed
+        self.username = None
 
     def addstr(self, *args):
         """Wrapper function addstr"""
@@ -69,7 +70,7 @@ class SnakeGame(object):
         curses.init_pair(4, curses.COLOR_RED, curses.COLOR_BLACK)
 
         # Other
-        self.logo = 'SNAKE GAME [{0} x {1}]'.format(screen_w, screen_h)
+        self.logo = 'SNAKE GAME [{0} x {1}]'.format(screen_w, screen_h) + '\tPLAYER: {0}'
         self.timeformats = [0, (
             '%d.%m.%Y %H:%M:%S',
             '%d.%m.%Y %H:%M:%S.%f',
@@ -91,7 +92,8 @@ class SnakeGame(object):
             self.game_obj.scr_obj.border()
 
         # Render statusbar
-        self._render_statusbar()
+        if self.game_obj.username:
+            self._render_statusbar()
 
     def _render_statusbar(self):
         """Render status bar"""
@@ -101,7 +103,10 @@ class SnakeGame(object):
             self.game_obj.addstr(
                 self.game_obj.scr_y[1] + 1,
                 self.game_obj.scr_x[0],
-                '{0}{1}'.format(self.logo.ljust(self.game_obj.scr_x[1] - len(str_time) - 1, ' '), str_time)
+                '{0}{1}'.format(
+                    self.logo.format(self.game_obj.username).ljust(self.game_obj.scr_x[1] - len(str_time) - 1, ' '),
+                    str_time
+                )
             )
 
     def start(self):

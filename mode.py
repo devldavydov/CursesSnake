@@ -4,6 +4,8 @@ import curses
 import random
 import time
 
+import stats
+
 
 class GameMode(object):
     """Game mode base class"""
@@ -25,6 +27,7 @@ class GameMode(object):
             u'USE \u2190 \u2191 \u2192 \u2193 TO CONTROL SNAKE',
             u"PRESS 's' TO START GAME",
             u"PRESS 'i' TO INTRO SCREEN",
+            u"PRESS 'p' TO PAUSE",
             u"PRESS 't' TO CHANGE TIMESTAMP FORMAT",
             u"PRESS 'q' TO EXIT"
         )
@@ -40,7 +43,7 @@ class GameModeIntro(GameMode):
     def __init__(self, game_obj):
         """Constructor"""
         super(GameModeIntro, self).__init__(game_obj)
-        self.howto = tuple(val for i, val in enumerate(self.howto) if i != 2)
+        self.howto = tuple(val for i, val in enumerate(self.howto) if not i in (2, 3))
         self.about_form = {
             'w': 65,
             'h': 30
@@ -99,13 +102,26 @@ class GameModeIntro(GameMode):
             self.game_obj.addstr(y + 2, x + (self.about_form['w'] - len(s)) / 2, s)
             y += 8
             x += 2
-            for s in self.howto:
-                y += 2
-                self.game_obj.addstr(y, x, s.encode('utf-8'))
+
+            # Enter username or print howto
+            if not self.game_obj.username:
+                prompt = 'ENTER YOUR NAME: '
+                self.game_obj.scr_obj.nodelay(0)
+                curses.echo()
+                self.game_obj.addstr(y + 2, x, prompt)
+                while not self.game_obj.username:
+                    self.game_obj.username = self.game_obj.scr_obj.getstr(y + 2, x + len(prompt))[:10].upper()
+                self.game_obj.scr_obj.nodelay(1)
+                curses.noecho()
+            else:
+                for s in self.howto:
+                    y += 2
+                    self.game_obj.addstr(y, x, s.encode('utf-8'))
 
     def render(self):
         """Render about form and background"""
-        self._render_bg()
+        if self.game_obj.username:
+            self._render_bg()
         self._render_about_form()
 
     class MatrixItem(object):
@@ -157,6 +173,16 @@ class GameModePlay(GameMode):
             'x': (1, self.game_obj.scr_x[1] - self.stats_form['w']),
             'y': (1, self.game_obj.scr_y[1])
         }
+        # Pause
+        self.pause = {
+            'flag': False,
+            'text': '*** PAUSE ***'
+        }
+        # Game over
+        self.gameover = {
+            'flag': False,
+            'text': '*** GAME OVER ***'
+        }
         # Snake
         self.points = 0
         self.speed = 1.0
@@ -184,6 +210,8 @@ class GameModePlay(GameMode):
             'timeout': 0.3,
             'show_flag': True
         }
+        # Users stats
+        self.users_stats = stats.load_stats()
 
     def _render_field_border(self):
         """Render game field border"""
@@ -207,6 +235,17 @@ class GameModePlay(GameMode):
             self.game_obj.addstr(y + 3, x, 'YOUR SPEED = {0}'.format(self.speed))
             self.game_obj.addstr(y + 5, x, 'SNAKE LENGTH = {0}'.format(len(self.snake['items'])))
 
+            # Users stats
+            if self.users_stats:
+                y += 10
+                self.game_obj.addstr(y, x, 'TOP 5 USERS:')
+                self.game_obj.addstr(y + 1, x, '************')
+
+                y += 1
+                for i, u in enumerate(self.users_stats):
+                    self.game_obj.addstr(y + i + 1, x, '{0} - {1}'.format(u[0], u[1]))
+
+            # How to
             y = self.field['y'][1] - len(self.howto)
             for s in self.howto:
                 self.game_obj.addstr(y, x, s.encode('utf-8'))
@@ -222,7 +261,10 @@ class GameModePlay(GameMode):
             for i, item in enumerate(self.snake['items']):
                 self.game_obj.addstr(item[1], item[0], self.snake['symbol'])
 
-        if time.time() - self.snake['time'] > 1 / (self.speed * 10):
+        if (
+            not (self.pause['flag'] or self.gameover['flag']) and
+            (time.time() - self.snake['time'] > 1 / (self.speed * 10))
+        ):
             # Check key
             key = self.game_obj.check_key(lambda k: k in self.direction_map)
             if key:
@@ -238,11 +280,16 @@ class GameModePlay(GameMode):
             # Head
             self.snake['items'][0][0] += self.snake['direction'][0]
             self.snake['items'][0][1] += self.snake['direction'][1]
+
+            # Check game over
             if (
-                self._check_field_border(*self.snake['items'][1]) or    # We check second item to render collision
+                self._check_field_border(*self.snake['items'][0]) or
                 self.snake['items'].count(self.snake['items'][0]) > 1
             ):
-                raise SystemExit('Game over')
+                self.gameover['flag'] = True
+                # Save user stats
+                if self.points:
+                    stats.save_stats(self.game_obj.username, self.points)
 
             self.snake['time'] = time.time()
 
@@ -273,6 +320,27 @@ class GameModePlay(GameMode):
                 self.snake['items'][0][1] + self.snake['direction'][1]
             ])
 
+    def _render_pause_gameover(self):
+        """Render pause or gameover"""
+
+        def _render_center_str(s):
+            """Helper function to render string at game field center"""
+            self.game_obj.addstr(
+                (self.field['y'][1] + self.field['y'][0]) / 2,
+                self.field['x'][0] + (self.field['x'][1] - self.field['x'][0] + 1 - len(s)) / 2,
+                s
+            )
+
+        if self.gameover['flag']:
+            _render_center_str(self.gameover['text'])
+        elif self.pause['flag']:
+            _render_center_str(self.pause['text'])
+
+    def _check_pause(self):
+        """Check pause"""
+        if self.game_obj.check_key(lambda k: k == ord('p')):
+            self.pause['flag'] = not self.pause['flag']
+
     def _get_new_prey(self):
         return [
             random.randrange(self.field['x'][0] + 1, self.field['x'][1] - 1),
@@ -285,4 +353,6 @@ class GameModePlay(GameMode):
         self._render_stats_form()
         self._render_snake()
         self._render_prey()
+        self._render_pause_gameover()
         self._check_prey()
+        self._check_pause()
