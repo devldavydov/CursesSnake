@@ -5,5 +5,3 @@ Console snake game on ncurses library.
 ```
 python csnake.py
 ```
-
-Under development.
